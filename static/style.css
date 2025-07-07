@@ -1,0 +1,140 @@
+body, html {
+    height: 100%;
+    overflow: hidden;
+}
+
+.h-100 {
+    height: 100vh !important;
+}
+
+#map {
+    height: 100vh;
+    z-index: 1;
+}
+
+#map-loading {
+    z-index: 1000;
+    background: rgba(var(--bs-dark-rgb), 0.8);
+    border-radius: 0.5rem;
+    padding: 2rem;
+}
+
+.sidebar-container {
+    height: 100vh;
+    overflow: hidden;
+}
+
+.sidebar-scroll {
+    height: 100vh;
+    overflow-y: auto;
+    padding-right: 15px;
+    margin-right: -15px;
+}
+
+.marker-embalse {
+    background-color: var(--bs-success);
+    border-color: var(--bs-success);
+}
+
+.marker-critico {
+    background-color: var(--bs-warning);
+    border-color: var(--bs-warning);
+}
+
+.marker-obstaculo {
+    background-color: var(--bs-danger);
+    border-color: var(--bs-danger);
+}
+
+.marker-normal {
+    background-color: var(--bs-info);
+    border-color: var(--bs-info);
+}
+
+.card {
+    margin-bottom: 1.5rem;
+}
+
+.form-label.small {
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+}
+
+.btn-warning {
+    background-color: var(--bs-warning);
+    border-color: var(--bs-warning);
+    color: var(--bs-dark);
+}
+
+.btn-warning:hover {
+    background-color: #f39c12;
+    border-color: #f39c12;
+}
+
+.route-popup {
+    font-size: 0.9rem;
+}
+
+.route-popup h6 {
+    color: var(--bs-primary);
+    border-bottom: 1px solid var(--bs-border-color);
+    padding-bottom: 0.25rem;
+}
+
+.fas.fa-exclamation-triangle {
+    animation: pulse-warning 2s infinite;
+}
+
+@keyframes pulse-warning {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+
+.route-item {
+    border-left: 3px solid var(--bs-primary);
+    padding-left: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.flow-item {
+    border-left: 3px solid var(--bs-success);
+    padding-left: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    transition: transform 0.2s ease-in-out;
+}
+
+.btn-loading {
+    pointer-events: none;
+    opacity: 0.6;
+}
+.border-rounded {
+    border-radius: 0.5rem;
+}
+
+.card-header {
+    font-weight: 500;
+}
+
+.h4 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--bs-primary);
+}
+@media (max-width: 768px) {
+    .container-fluid .row {
+        flex-direction: column;
+    }
+    
+    #map {
+        height: 60vh;
+    }
+    
+    .sidebar-scroll {
+        max-height: 40vh;
+    }
+}

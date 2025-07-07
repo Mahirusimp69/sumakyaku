@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sumaq Yaku - Sistema de Optimización de Agua</title>
+    
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body data-bs-theme="dark">
+    <nav class="navbar navbar-dark bg-primary">
+        <div class="container-fluid">
+            <span class="navbar-brand mb-0 h1">
+                <i class="fas fa-tint me-2"></i>
+                Sumaq Yaku - Sistema de Distribución de Agua
+            </span>
+            <button class="btn btn-outline-light" onclick="verificarEstado()">
+                <i class="fas fa-check-circle me-1"></i>
+                Verificar Estado
+            </button>
+        </div>
+    </nav>
+
+    <div class="container-fluid h-100">
+        <div class="row h-100">
+            <div class="col-md-4 col-lg-3 bg-dark border-end sidebar-container">
+                <div class="container py-4 sidebar-scroll">
+                    <h2 class="h4 mb-4">
+                        <i class="fas fa-cogs me-2"></i>
+                        Panel de Control
+                    </h2>
+                    
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <i class="fas fa-info-circle me-2"></i>
+                                Estado del Sistema
+                            </h5>
+                            <div id="estado-sistema">
+                                <span class="badge bg-secondary">Iniciando...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <i class="fas fa-play me-2"></i>
+                                Procesamiento
+                            </h5>
+                            <p class="card-text small text-muted">
+                                Ejecuta el análisis de distribución de agua y optimización de rutas.
+                            </p>
+                            <button class="btn btn-success w-100 mb-2" onclick="procesar()" id="btn-procesar">
+                                <i class="fas fa-play me-1"></i>
+                                Procesar Datos
+                            </button>
+                            <button class="btn btn-info w-100" onclick="generarRedCompleta()" id="btn-generar">
+                                <i class="fas fa-network-wired me-1"></i>
+                                Generar Red Completa
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <i class="fas fa-plus-circle me-2"></i>
+                                Agregar Nodo
+                            </h5>
+                            <form id="form-agregar-nodo">
+                                <div class="mb-2">
+                                    <label class="form-label small">ID del Nodo</label>
+                                    <input type="text" class="form-control form-control-sm" id="nuevo-id-nodo" placeholder="N006" required>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-6">
+                                        <label class="form-label small">Latitud</label>
+                                        <input type="number" class="form-control form-control-sm" id="nueva-latitud" 
+                                               step="0.0001" placeholder="-16.2500" required>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small">Longitud</label>
+                                        <input type="number" class="form-control form-control-sm" id="nueva-longitud" 
+                                               step="0.0001" placeholder="-71.2200" required>
+                                    </div>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-6">
+                                        <label class="form-label small">Tipo</label>
+                                        <select class="form-select form-select-sm" id="nuevo-tipo" required>
+                                            <option value="cuadra">Cuadra</option>
+                                            <option value="tubo">Tubo</option>
+                                            <option value="bomba">Bomba</option>
+                                            <option value="valvula">Válvula</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small">Estado</label>
+                                        <select class="form-select form-select-sm" id="nuevo-estado" required>
+                                            <option value="transitable">Transitable</option>
+                                            <option value="obstaculo">Obstáculo</option>
+                                            <option value="mantenimiento">Mantenimiento</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-sm w-100">
+                                    <i class="fas fa-plus me-1"></i>
+                                    Agregar Nodo
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-body">
+                            <h6 class="card-title">
+                                <i class="fas fa-exclamation-triangle me-2 text-warning"></i>
+                                Agregar Obstáculo (Punto Crítico)
+                            </h6>
+                            <p class="card-text small text-muted">
+                                Los puntos críticos son obstáculos donde NO puede pasar el agua.
+                            </p>
+                            <form id="form-punto-critico" class="needs-validation" novalidate>
+                                <div class="row g-2 mb-2">
+                                    <div class="col-6">
+                                        <label class="form-label small">Nombre</label>
+                                        <input type="text" class="form-control form-control-sm" id="nuevo-nombre-critico" 
+                                               placeholder="PC_001" required>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small">Tipo</label>
+                                        <select class="form-select form-select-sm" id="nuevo-tipo-critico" required>
+                                            <option value="inundacion">Inundación</option>
+                                            <option value="deslizamiento">Deslizamiento</option>
+                                            <option value="hundimiento">Hundimiento</option>
+                                            <option value="obra">Obra en construcción</option>
+                                            <option value="contaminacion">Contaminación</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="row g-2 mb-2">
+                                    <div class="col-6">
+                                        <label class="form-label small">Latitud</label>
+                                        <input type="number" class="form-control form-control-sm" id="nueva-latitud-critico" 
+                                               step="0.000001" placeholder="-16.4091" required>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small">Longitud</label>
+                                        <input type="number" class="form-control form-control-sm" id="nueva-longitud-critico" 
+                                               step="0.000001" placeholder="-71.5375" required>
+                                    </div>
+                                </div>
+                                <div class="row g-2 mb-3">
+                                    <div class="col-6">
+                                        <label class="form-label small">Prioridad</label>
+                                        <select class="form-select form-select-sm" id="nueva-prioridad-critico" required>
+                                            <option value="alta">Alta</option>
+                                            <option value="media" selected>Media</option>
+                                            <option value="baja">Baja</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small">Población Afectada</label>
+                                        <input type="number" class="form-control form-control-sm" id="nueva-poblacion-critico" 
+                                               placeholder="1000" min="0">
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-warning btn-sm w-100">
+                                    <i class="fas fa-exclamation-triangle me-1"></i>
+                                    Agregar Punto Crítico
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <i class="fas fa-chart-line me-2"></i>
+                                Resultados
+                            </h5>
+                            <div id="resultados">
+                                <p class="text-muted small">
+                                    Los resultados aparecerán aquí después del procesamiento.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-8 col-lg-9 p-0">
+                <div id="map" class="h-100"></div>
+
+                <div id="map-loading" class="position-absolute top-50 start-50 translate-middle text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Cargando mapa...</span>
+                    </div>
+                    <p class="mt-2 text-muted">Cargando mapa interactivo...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="loadingModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-sm modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-body text-center py-4">
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">Procesando...</span>
+                    </div>
+                    <p class="mb-0">Procesando datos del sistema...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script src="{{ url_for('static', filename='mapa.js') }}"></script>
+</body>
+</html>
