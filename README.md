@@ -1,4 +1,4 @@
- # 🌊 Sumakyaku - Sistema de Optimización de Redes de Distribución de Agua
+# 🌊 Sumakyaku - Sistema de Optimización de Redes de Distribución de Agua
 
 [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![Flask](https://img.shields.io/badge/Flask-2.0+-green.svg)](https://flask.palletsprojects.com/)
