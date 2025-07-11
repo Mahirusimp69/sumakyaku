@@ -100,8 +100,19 @@ def construir_grafo(embalses, puntos, nodos, aristas):
                 capacidad=capacidad,
                 distancia=dist
             )
+            # Agregar arista inversa si no existe
+            if not G.has_edge(a['destino'], a['origen']):
+                G.add_edge(
+                    a['destino'],
+                    a['origen'],
+                    weight=dist,
+                    estado=a['estado'],
+                    color=color,
+                    capacidad=capacidad,
+                    distancia=dist
+                )
             edges_added += 1
-            logging.debug(f"Added edge: {a['origen']} -> {a['destino']} (distance: {dist:.2f}km)")
+            logging.debug(f"Added edge: {a['origen']} <-> {a['destino']} (distance: {dist:.2f}km)")
     
     logging.info(f"Graph constructed with {len(G.nodes)} nodes and {edges_added} edges")
     return G
@@ -111,34 +122,40 @@ def calcular_rutas_y_flujos(G, fuente):
     rutas = {}
     flujos = {}
 
-    # Incluir todos los nodos de destino que no sean embalses ni puntos críticos
-    destinos = [n for n, d in G.nodes(data=True) 
-                if d.get("tipo") not in ["punto_critico", "embalse"]]
+    # Definir límites aproximados de la ciudad de Arequipa
+    LAT_MIN, LAT_MAX = -16.45, -16.30
+    LON_MIN, LON_MAX = -71.60, -71.45
 
-    print("Fuente:", fuente)
-    print("Destinos:", destinos)
+    def dentro_de_ciudad(pos):
+        lat, lon = pos
+        return LAT_MIN <= lat <= LAT_MAX and LON_MIN <= lon <= LON_MAX
+
+    # Filtrar destinos solo dentro de la ciudad
+    destinos = [
+        n for n, d in G.nodes(data=True)
+        if d.get("tipo") not in ["punto_critico", "embalse"]
+        and d.get("estado") != "obstaculo"
+        and dentro_de_ciudad(d.get("pos", (0, 0)))
+    ]
 
     if not destinos:
         logging.warning("No accessible distribution nodes found for route calculation")
-        return rutas, flujos
+        return rutas, flujos, None
 
     destinos = destinos[:10]
     logging.info(f"Calculating routes from {fuente} to {len(destinos)} distribution nodes")
 
     G_transitable = G.copy()
 
-    # Solo eliminar nodos de tipo 'punto_critico', no los de estado 'obstaculo'
     nodos_obstaculo = [n for n, d in G_transitable.nodes(data=True) 
-                       if d.get("tipo") == "punto_critico"]
+                       if d.get("estado") == "obstaculo" or d.get("tipo") == "punto_critico"]
     G_transitable.remove_nodes_from(nodos_obstaculo)
 
     edges_to_remove = [(u, v) for u, v, d in G_transitable.edges(data=True) 
                       if d.get('estado') == 'bloqueado']
     G_transitable.remove_edges_from(edges_to_remove)
-    
+
     for destino in destinos:
-        print("Probando camino de", fuente, "a", destino)
-        print("Existe camino:", nx.has_path(G_transitable, fuente, destino))
         try:
             if nx.has_path(G_transitable, fuente, destino):
                 ruta = nx.dijkstra_path(G_transitable, fuente, destino, weight='weight')
@@ -150,7 +167,7 @@ def calcular_rutas_y_flujos(G, fuente):
         except Exception as e:
             logging.error(f"Error calculating route to {destino}: {e}")
             rutas[destino] = None
-    
+
         try:
             if nx.has_path(G_transitable, fuente, destino):
                 flujo = nx.maximum_flow_value(G_transitable, fuente, destino, capacity='capacidad')
@@ -161,5 +178,70 @@ def calcular_rutas_y_flujos(G, fuente):
         except Exception as e:
             logging.error(f"Error calculating flow to {destino}: {e}")
             flujos[destino] = 0
-    
-    return rutas, flujos
+
+    # Seleccionar rutas conectadas entre nodos transitables más cercanos
+    nodos_transitables = [n for n, d in G_transitable.nodes(data=True)
+                         if d.get("estado") == "transitable" and dentro_de_ciudad(d.get("pos", (0, 0)))]
+    rutas_destacadas = []
+    usados = set()
+    for origen in nodos_transitables:
+        if origen in usados:
+            continue
+        pos_origen = G_transitable.nodes[origen]["pos"]
+        # Buscar el nodo transitable más cercano que no haya sido usado y que esté conectado
+        candidatos = [n for n in nodos_transitables if n != origen and n not in usados]
+        candidatos = sorted(candidatos, key=lambda n: geodesic(pos_origen, G_transitable.nodes[n]["pos"]).meters)
+        for destino in candidatos:
+            try:
+                if nx.has_path(G_transitable, origen, destino):
+                    ruta = nx.dijkstra_path(G_transitable, origen, destino, weight='weight')
+                    flujo = nx.maximum_flow_value(G_transitable, origen, destino, capacity='capacidad')
+                    rutas_destacadas.append({
+                        'inicio': origen,
+                        'fin': destino,
+                        'ruta': ruta,
+                        'flujo_maximo': round(flujo, 2)
+                    })
+                    usados.add(origen)
+                    usados.add(destino)
+                    break  # Solo una ruta por origen
+            except Exception as e:
+                logging.error(f"Error calculating connected highlighted route {origen} -> {destino}: {e}")
+                continue
+        if len(rutas_destacadas) >= 5:
+            break
+    return rutas, flujos, rutas_destacadas
+
+    # Rutas conectadas partiendo desde el embalse (fuente)
+    rutas_destacadas = []
+    usados = set([fuente])
+    actual = fuente
+    rutas_optimas_panel = {}
+    for _ in range(3):  # Hasta 3 rutas conectadas
+        pos_actual = G_transitable.nodes[actual]["pos"]
+        candidatos = [n for n in nodos_transitables if n != actual and n not in usados]
+        candidatos = sorted(candidatos, key=lambda n: geodesic(pos_actual, G_transitable.nodes[n]["pos"]).meters)
+        encontrado = False
+        for destino in candidatos:
+            try:
+                if nx.has_path(G_transitable, actual, destino):
+                    ruta = nx.dijkstra_path(G_transitable, actual, destino, weight='weight')
+                    flujo = nx.maximum_flow_value(G_transitable, actual, destino, capacity='capacidad')
+                    rutas_destacadas.append({
+                        'inicio': actual,
+                        'fin': destino,
+                        'ruta': ruta,
+                        'flujo_maximo': round(flujo, 2)
+                    })
+                    usados.add(destino)
+                    rutas_optimas_panel[destino] = ruta
+                    actual = destino
+                    encontrado = True
+                    break
+            except Exception as e:
+                logging.error(f"Error calculating connected highlighted route {actual} -> {destino}: {e}")
+                continue
+        if not encontrado:
+            break
+    flujos_panel = {r['fin']: r['flujo_maximo'] for r in rutas_destacadas}
+    return rutas_optimas_panel, flujos_panel, rutas_destacadas

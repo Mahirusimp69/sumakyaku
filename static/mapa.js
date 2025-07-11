@@ -103,11 +103,76 @@ function procesar() {
             throw new Error(data.error);
         }
 
+        // Limpiar el panel de resultados antes de mostrar los nuevos
+        const resultadosDiv = document.getElementById('resultados');
+        resultadosDiv.innerHTML = '';
+
         visualizarNodos(data.nodos);
 
         visualizarAristas(data.nodos, data.aristas);
 
-        mostrarResultados(data.rutas_optimas, data.flujos_maximos, data.fuente);
+        // Filtrar flujos para que el panel muestre todos los nodos relevantes de las rutas rojas activas (no solo el destino final)
+        let flujosRutasRojas = {};
+        let nodosIncluidos = new Set();
+        if (data.rutas_destacadas && typeof data.rutas_destacadas === 'object' && !Array.isArray(data.rutas_destacadas)) {
+            // Si rutas_destacadas es un objeto (diccionario de rutas)
+            for (const destino in data.rutas_destacadas) {
+                const ruta = data.rutas_destacadas[destino];
+                if (Array.isArray(ruta)) {
+                    ruta.forEach(nodo => {
+                        if (data.flujos_maximos[nodo] > 0 && !nodosIncluidos.has(nodo)) {
+                            flujosRutasRojas[nodo] = data.flujos_maximos[nodo];
+                            nodosIncluidos.add(nodo);
+                        }
+                    });
+                }
+            }
+        } else if (Array.isArray(data.rutas_destacadas)) {
+            // Si rutas_destacadas es un array de objetos {inicio, fin, ruta, flujo_maximo}
+            data.rutas_destacadas.forEach(rutaObj => {
+                if (rutaObj && Array.isArray(rutaObj.ruta)) {
+                    rutaObj.ruta.forEach(nodo => {
+                        if (data.flujos_maximos[nodo] > 0 && !nodosIncluidos.has(nodo)) {
+                            flujosRutasRojas[nodo] = data.flujos_maximos[nodo];
+                            nodosIncluidos.add(nodo);
+                        }
+                    });
+                }
+            });
+        }
+        // Si no hay rutas activas, mostrar mensaje claro en el panel
+        if (Object.keys(flujosRutasRojas).length === 0) {
+            const resultadosDiv = document.getElementById('resultados');
+            resultadosDiv.innerHTML = `
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    No hay rutas activas para mostrar.
+                </div>
+            `;
+        } else {
+            mostrarResultados(data.rutas_destacadas, flujosRutasRojas, data.fuente);
+        }
+
+        // Pintar todas las rutas destacadas si existen
+        if (data.rutas_destacadas && Array.isArray(data.rutas_destacadas)) {
+            const nodos = obtenerCoordenadasNodos();
+            data.rutas_destacadas.forEach(rutaObj => {
+                if (rutaObj && Array.isArray(rutaObj.ruta) && rutaObj.ruta.length > 1) {
+                    const coords = rutaObj.ruta.map(nodo => nodos[nodo] ? [nodos[nodo].lat, nodos[nodo].lng] : null).filter(Boolean);
+                    if (coords.length > 1) {
+                        L.polyline(coords, {
+                            color: '#FF0000',
+                            weight: 8,
+                            opacity: 1,
+                            dashArray: null
+                        }).addTo(routesLayer).bindPopup(
+                            `<b>Ruta óptima ${rutaObj.inicio} → ${rutaObj.fin}</b><br>` +
+                            (rutaObj.flujo_maximo !== undefined ? `<b>Flujo máximo:</b> ${formatNumber(rutaObj.flujo_maximo)} unidades/h` : '')
+                        );
+                    }
+                }
+            });
+        }
 
         loadingModal.hide();
     })
@@ -243,37 +308,34 @@ function visualizarAristas(nodos, aristas) {
 }
 function mostrarResultados(rutas, flujos, fuente) {
     const resultadosDiv = document.getElementById('resultados');
-    const flujosOrdenados = Object.entries(flujos).sort((a, b) => b[1] - a[1]);
-    
     let html = `
         <div class="alert alert-success">
             <i class="fas fa-check-circle me-2"></i>
             Procesamiento completado desde <strong>${fuente}</strong>
         </div>
-        
         <h5 class="mt-4 mb-3"><i class="fas fa-tint me-2"></i>Flujos Máximos</h5>
         <div class="row">
     `;
-    
-    flujosOrdenados.forEach(([destino, flujo], index) => {
+
+    // Solo mostrar los flujos de los destinos de rutas rojas
+    Object.entries(flujos).forEach(([destino, flujo], index) => {
         if (index % 2 === 0) html += '<div class="col-md-6">';
-        
         html += `
             <div class="mb-3 p-2 border rounded">
                 <span class="badge bg-primary">${destino}</span>
                 <span class="float-end">${formatNumber(flujo)} L/h</span>
             </div>
         `;
-        
-        if (index % 2 !== 0 || index === flujosOrdenados.length - 1) html += '</div>';
+        if (index % 2 !== 0 || index === Object.entries(flujos).length - 1) html += '</div>';
     });
-    
+
     html += `</div>`;
-    
-    const rutasActivas = Object.values(rutas).filter(r => r !== null).length;
-    const totalDestinos = Object.keys(rutas).length;
+
+    // Calcula rutas activas y flujo total SOLO con los flujos actuales
+    const rutasActivas = Object.values(flujos).filter(f => f > 0).length;
+    const totalDestinos = Object.keys(flujos).length;
     const flujoTotal = Object.values(flujos).reduce((a, b) => a + b, 0);
-    
+
     html += `
         <div class="card mt-4">
             <div class="card-header bg-primary text-white">
@@ -297,7 +359,7 @@ function mostrarResultados(rutas, flujos, fuente) {
             </div>
         </div>
     `;
-    
+
     resultadosDiv.innerHTML = html;
 }
 
@@ -305,15 +367,13 @@ function visualizarRutasEnMapa(rutas, flujos) {
 
     routesLayer.clearLayers();
 
-    const colores = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'];
-    let colorIndex = 0;
-
     const nodos = obtenerCoordenadasNodos();
     
     for (const [destino, ruta] of Object.entries(rutas)) {
         if (ruta && ruta.length > 1) {
-            const color = colores[colorIndex % colores.length];
             const flujo = flujos[destino] || 0;
+            // Rojo para rutas activas, gris para inactivas
+            const color = flujo > 0 ? '#FF0000' : '#6c757d';
 
             const coordenadas = [];
             for (const nodo of ruta) {
@@ -337,8 +397,6 @@ function visualizarRutasEnMapa(rutas, flujos) {
                         <p class="small mb-0"><strong>Flujo máximo:</strong> ${formatNumber(flujo)} unidades/h</p>
                     </div>
                 `);
-                
-                colorIndex++;
             }
         }
     }
@@ -551,7 +609,7 @@ function generarRedCompleta() {
         btn.innerHTML = '<i class="fas fa-network-wired me-1"></i> Generar Red Completa';
     });
 }
-+
+
 function formatNumber(num) {
     return num.toLocaleString('es-PE');
 }

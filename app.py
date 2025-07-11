@@ -47,7 +47,7 @@ def procesar():
         else:
             return jsonify({"error": "No reservoirs found in data"}), 400
 
-        rutas, flujos = calcular_rutas_y_flujos(G, fuente)
+        rutas, flujos, rutas_destacadas = calcular_rutas_y_flujos(G, fuente)
         
         processing_time_ms = int((time.time() - start_time) * 1000)
         
@@ -109,14 +109,18 @@ def procesar():
             logging.warning(f"Failed to save to database: {db_error}")
             db.session.rollback()
         
+        # Solo mostrar en el panel los flujos de los destinos de rutas destacadas
+        flujos_panel = {r['fin']: r['flujo_maximo'] for r in rutas_destacadas}
+        rutas_panel = {r['fin']: r['ruta'] for r in rutas_destacadas}
         return jsonify({
-            "rutas_optimas": rutas,
-            "flujos_maximos": flujos,
+            "rutas_optimas": rutas_panel,
+            "flujos_maximos": flujos_panel,
             "nodos": nodos_json,
             "aristas": aristas_json,
             "fuente": fuente,
             "procesamiento_id": procesamiento.id if 'procesamiento' in locals() else None,
-            "tiempo_procesamiento_ms": processing_time_ms
+            "tiempo_procesamiento_ms": processing_time_ms,
+            "rutas_destacadas": rutas_destacadas
         })
         
     except Exception as e:
